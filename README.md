@@ -38,7 +38,7 @@ it's one html file, a stylesheet, and four scripts. no build step, no npm instal
 | <kbd>X</kbd> | delete all wells |
 | <kbd>space</kbd> | next mode |
 | <kbd>C</kbd> | next color palette |
-| <kbd>+</kbd> <kbd>-</kbd> | 500 more / fewer particles (500 – 12,000) |
+| <kbd>+</kbd> <kbd>-</kbd> | more / fewer particles, 500 up to 30,000 (steps of 500, then 2,500 past 5k) |
 | <kbd>P</kbd> | paint on/off: every particle leaves a little color behind |
 | <kbd>E</kbd> | erase the painting |
 | <kbd>S</kbd> | save what's on screen (paint included) as a png |

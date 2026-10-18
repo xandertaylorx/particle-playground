@@ -168,8 +168,9 @@ addEventListener('keydown', e => {
     setMode((mode + 1) % modes.length)
   }
   else if (k === 'c') palette = (palette + 1) % paletteNames.length
-  else if (k === '+' || k === '=') { count = Math.min(12000, count + 500); fill() }
-  else if (k === '-') { count = Math.max(500, count - 500); fill() }
+  // small steps down low, big steps up high so getting to 30k isn't 50 key presses
+  else if (k === '+' || k === '=') { count = Math.min(30000, count + (count < 5000 ? 500 : 2500)); fill() }
+  else if (k === '-') { count = Math.max(500, count - (count <= 5000 ? 500 : 2500)); fill() }
   else if (k === 'x') wells.length = 0
   else if (k === 'p') painting = !painting
   else if (k === 'e') pctx.clearRect(0, 0, W, H)
