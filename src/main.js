@@ -20,7 +20,7 @@ const palettes = {
 const paletteNames = Object.keys(palettes)
 let palette = 0
 
-const modes = ['attract', 'repel', 'orbit', 'swirl']
+const modes = ['attract', 'repel', 'orbit', 'swirl', 'text']
 let mode = 0
 
 function resize() {
@@ -32,6 +32,7 @@ function resize() {
   canvas.style.width = W + 'px'
   canvas.style.height = H + 'px'
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  if (modes[mode] === 'text') spell()
 }
 
 function spawn(x = Math.random() * W, y = Math.random() * H) {
@@ -41,6 +42,8 @@ function spawn(x = Math.random() * W, y = Math.random() * H) {
     vy: (Math.random() - .5) * 2,
     size: Math.random() * 1.8 + .6,
     seed: Math.random(),
+    tx: null, // home position in text mode
+    ty: null,
   }
 }
 
@@ -48,10 +51,14 @@ function fill() {
   while (particles.length < count) particles.push(spawn())
   particles.length = count
   $('count').textContent = count
+  if (modes[mode] === 'text') spell()
 }
 
 function setMode(i) {
   mode = i
+  const text = modes[i] === 'text'
+  $('wordRow').style.display = text ? 'flex' : 'none'
+  if (text) spell()
 }
 
 function hud() {
@@ -138,10 +145,22 @@ function frame(t) {
       const a = Math.sin(p.x * .004 + t * .0004) * 3 + Math.cos(p.y * .004 - t * .0003) * 3
       p.vx += Math.cos(a) * .15 * boost + nx * pull * .08
       p.vy += Math.sin(a) * .15 * boost + ny * pull * .08
+    } else if (m === 'text' && p.tx !== null) {
+      // spring back home, cursor shoves them out of the way
+      p.vx += (p.tx - p.x) * .012
+      p.vy += (p.ty - p.y) * .012
+      if (mouse.active && d < 90) {
+        p.vx -= nx * (90 - d) * .06
+        p.vy -= ny * (90 - d) * .06
+      }
+      p.vx += (Math.random() - .5) * audio.level * 3
+      p.vy += (Math.random() - .5) * audio.level * 3
     }
 
-    p.vx *= .96
-    p.vy *= .96
+    // letters need more friction or they wobble forever
+    const damp = m === 'text' ? .9 : .96
+    p.vx *= damp
+    p.vy *= damp
     p.x += p.vx
     p.y += p.vy
     if (p.x < 0) { p.x = 0; p.vx *= -1 } else if (p.x > W) { p.x = W; p.vx *= -1 }

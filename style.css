@@ -47,6 +47,15 @@ button, input {
 }
 button.on { background: #d83b6a; }
 
+input {
+  width: 130px;
+  background: #1a1c30;
+  outline: 1px solid #3b3fd8;
+  cursor: text;
+}
+
+#wordRow { display: none; }
+
 kbd {
   background: #22243a;
   border-radius: 4px;
