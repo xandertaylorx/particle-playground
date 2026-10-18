@@ -22,7 +22,8 @@ const palettes = {
 const paletteNames = Object.keys(palettes)
 let palette = 0
 
-const modes = ['attract', 'repel', 'orbit', 'swirl', 'text']
+const modes = ['attract', 'repel', 'orbit', 'swirl', 'text', 'image']
+const homing = m => m === 'text' || m === 'image'
 let mode = 0
 
 function resize() {
@@ -34,7 +35,13 @@ function resize() {
   canvas.style.width = W + 'px'
   canvas.style.height = H + 'px'
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  retarget()
+}
+
+// text/image modes need fresh target spots whenever the size or count changes
+function retarget() {
   if (modes[mode] === 'text') spell()
+  if (modes[mode] === 'image') picture()
 }
 
 function spawn(x = Math.random() * W, y = Math.random() * H) {
@@ -44,8 +51,9 @@ function spawn(x = Math.random() * W, y = Math.random() * H) {
     vy: (Math.random() - .5) * 2,
     size: Math.random() * 1.8 + .6,
     seed: Math.random(),
-    tx: null, // home position in text mode
+    tx: null, // home position in text/image mode
     ty: null,
+    col: null, // pixel color in image mode
   }
 }
 
@@ -53,14 +61,15 @@ function fill() {
   while (particles.length < count) particles.push(spawn())
   particles.length = count
   $('count').textContent = count
-  if (modes[mode] === 'text') spell()
+  retarget()
 }
 
 function setMode(i) {
+  // image mode only makes sense once there's a picture loaded
+  if (modes[i] === 'image' && !img) i = (i + 1) % modes.length
   mode = i
-  const text = modes[i] === 'text'
-  $('wordRow').style.display = text ? 'flex' : 'none'
-  if (text) spell()
+  $('wordRow').style.display = modes[i] === 'text' ? 'flex' : 'none'
+  retarget()
 }
 
 function hud() {
@@ -149,10 +158,9 @@ function frame(t) {
     ctx.fillRect(0, 0, W, H)
     flash *= .8
   }
-  ctx.globalCompositeOperation = 'lighter'
-
   const [h0, h1] = palettes[paletteNames[palette]]
   const m = modes[mode]
+  ctx.globalCompositeOperation = m === 'image' ? 'source-over' : 'lighter'
 
   // when the mouse is gone the target drifts around on its own
   const cx = mouse.active ? mouse.x : W / 2 + Math.cos(t / 1500) * W * .2
@@ -187,7 +195,7 @@ function frame(t) {
       const a = Math.sin(p.x * .004 + t * .0004) * 3 + Math.cos(p.y * .004 - t * .0003) * 3
       p.vx += Math.cos(a) * .15 * boost + nx * pull * .08
       p.vy += Math.sin(a) * .15 * boost + ny * pull * .08
-    } else if (m === 'text' && p.tx !== null) {
+    } else if (homing(m) && p.tx !== null) {
       // spring back home, cursor shoves them out of the way
       p.vx += (p.tx - p.x) * .012
       p.vy += (p.ty - p.y) * .012
@@ -209,7 +217,7 @@ function frame(t) {
     }
 
     // letters need more friction or they wobble forever
-    const damp = m === 'text' && !mouse.down ? .9 : .96
+    const damp = homing(m) && !mouse.down ? .9 : .96
     p.vx *= damp
     p.vy *= damp
     p.x += p.vx
@@ -218,11 +226,19 @@ function frame(t) {
     if (p.y < 0) { p.y = 0; p.vy *= -1 } else if (p.y > H) { p.y = H; p.vy *= -1 }
 
     const speed = Math.min(Math.hypot(p.vx, p.vy) / 8, 1)
-    const hue = h0 + (h1 - h0) * ((p.seed + speed * .5 + hueDrift * .002) % 1)
-    const s = p.size * (1 + speed * 1.5 + audio.level * 2.5)
-    ctx.fillStyle = `hsla(${hue}, 100%, ${45 + speed * 30}%, ${.5 + speed * .5})`
-    ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s)
+    if (m === 'image' && p.col) {
+      // bigger squares so the picture fills in, and no additive glow or it all turns white
+      const s = Math.max(p.size, imgStep * .95) * (1 + audio.level * 1.5)
+      ctx.fillStyle = p.col
+      ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s)
+    } else {
+      const hue = h0 + (h1 - h0) * ((p.seed + speed * .5 + hueDrift * .002) % 1)
+      const s = p.size * (1 + speed * 1.5 + audio.level * 2.5)
+      ctx.fillStyle = `hsla(${hue}, 100%, ${45 + speed * 30}%, ${.5 + speed * .5})`
+      ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s)
+    }
   }
+  ctx.globalCompositeOperation = 'lighter'
 
   for (const w of wells) {
     const age = (t - w.born) / 1000
