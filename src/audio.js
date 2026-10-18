@@ -29,6 +29,59 @@ $('mic').addEventListener('click', async () => {
   }
 })
 
+// --- songs ---
+let song
+
+$('song').addEventListener('click', () => {
+  if (!song) return $('file').click()
+  if (song.paused) {
+    song.play()
+    $('song').textContent = '⏸ pause'
+    $('song').classList.add('on')
+  } else {
+    song.pause()
+    $('song').textContent = '▶️ play'
+    $('song').classList.remove('on')
+  }
+})
+$('file').addEventListener('change', e => e.target.files[0] && play(e.target.files[0]))
+
+function play(file) {
+  ensureAudio()
+  if (!song) {
+    song = new Audio()
+    song.loop = true
+    // a media element can only be wired up once, so reuse it for every file
+    const src = actx.createMediaElementSource(song)
+    src.connect(analyser)
+    src.connect(actx.destination)
+  }
+  song.src = URL.createObjectURL(file)
+  song.play()
+  $('song').textContent = '⏸ pause'
+  $('song').classList.add('on')
+  $('playing').textContent = '♪ ' + file.name
+}
+
+// dragenter/leave fire for every child element, hence the counter
+let dragDepth = 0
+addEventListener('dragenter', e => {
+  e.preventDefault()
+  dragDepth++
+  $('drop').style.display = 'flex'
+})
+addEventListener('dragleave', () => {
+  if (--dragDepth <= 0) $('drop').style.display = 'none'
+})
+addEventListener('dragover', e => e.preventDefault())
+addEventListener('drop', e => {
+  e.preventDefault()
+  dragDepth = 0
+  $('drop').style.display = 'none'
+  const f = [...e.dataTransfer.files].find(f => f.type.startsWith('audio'))
+  if (f) play(f)
+})
+
 function readAudio(t) {
   if (!analyser) {
     audio.level *= .9

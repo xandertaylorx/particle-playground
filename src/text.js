@@ -1,6 +1,7 @@
 // draw the word on a hidden canvas, collect the lit pixels,
 // then hand each particle one of those pixels as its "home"
 function spell() {
+  if (!W || !H) return
   const word = ($('word').value || ' ').toUpperCase()
   const off = document.createElement('canvas')
   off.width = W

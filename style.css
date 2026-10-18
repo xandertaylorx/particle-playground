@@ -56,6 +56,24 @@ input {
 
 #wordRow { display: none; }
 
+#playing {
+  color: #9ea3ff;
+  font-size: 12px;
+}
+
+#drop {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(59, 63, 216, .25);
+  border: 3px dashed #8a8dff;
+  color: #fff;
+  font-size: 28px;
+  pointer-events: none;
+}
+
 kbd {
   background: #22243a;
   border-radius: 4px;
