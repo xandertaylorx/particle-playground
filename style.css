@@ -29,6 +29,24 @@ canvas {
 }
 #hud b { color: #fff; }
 
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+button, input {
+  background: #3b3fd8;
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+button.on { background: #d83b6a; }
+
 kbd {
   background: #22243a;
   border-radius: 4px;

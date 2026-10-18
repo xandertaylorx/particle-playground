@@ -94,10 +94,17 @@ addEventListener('keydown', e => {
   hud()
 })
 
+let hueDrift = 0
+
 function frame(t) {
+  readAudio(t)
+  hueDrift += audio.bass * 2
+  const boost = 1 + audio.level * 6
+
   // don't clear fully, the leftover alpha is what makes the trails
+  // (louder = longer trails)
   ctx.globalCompositeOperation = 'source-over'
-  ctx.fillStyle = 'rgba(5, 5, 10, .18)'
+  ctx.fillStyle = `rgba(5, 5, 10, ${.18 - audio.level * .08})`
   ctx.fillRect(0, 0, W, H)
   ctx.globalCompositeOperation = 'lighter'
 
@@ -112,7 +119,7 @@ function frame(t) {
     const dx = cx - p.x, dy = cy - p.y
     const d = Math.hypot(dx, dy) + .01
     const nx = dx / d, ny = dy / d
-    const pull = Math.min(600 / d, 1.2) * .35
+    const pull = Math.min(600 / d, 1.2) * .35 * boost
 
     if (m === 'attract') {
       // weaker pull up close + sideways drift, otherwise they all collapse into one dot
@@ -129,8 +136,8 @@ function frame(t) {
     } else if (m === 'swirl') {
       // cheap fake flow field, just two sines fighting each other
       const a = Math.sin(p.x * .004 + t * .0004) * 3 + Math.cos(p.y * .004 - t * .0003) * 3
-      p.vx += Math.cos(a) * .15 + nx * pull * .08
-      p.vy += Math.sin(a) * .15 + ny * pull * .08
+      p.vx += Math.cos(a) * .15 * boost + nx * pull * .08
+      p.vy += Math.sin(a) * .15 * boost + ny * pull * .08
     }
 
     p.vx *= .96
@@ -141,8 +148,8 @@ function frame(t) {
     if (p.y < 0) { p.y = 0; p.vy *= -1 } else if (p.y > H) { p.y = H; p.vy *= -1 }
 
     const speed = Math.min(Math.hypot(p.vx, p.vy) / 8, 1)
-    const hue = h0 + (h1 - h0) * ((p.seed + speed * .5) % 1)
-    const s = p.size * (1 + speed * 1.5)
+    const hue = h0 + (h1 - h0) * ((p.seed + speed * .5 + hueDrift * .002) % 1)
+    const s = p.size * (1 + speed * 1.5 + audio.level * 2.5)
     ctx.fillStyle = `hsla(${hue}, 100%, ${45 + speed * 30}%, ${.5 + speed * .5})`
     ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s)
   }
@@ -159,11 +166,12 @@ function frame(t) {
     if (s.a < .03) shocks.splice(i, 1)
   }
 
-  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 40)
+  const gr = 40 + audio.level * 120
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, gr)
   g.addColorStop(0, `hsla(${h0}, 100%, 70%, .35)`)
   g.addColorStop(1, 'hsla(0, 0%, 0%, 0)')
   ctx.fillStyle = g
-  ctx.fillRect(cx - 40, cy - 40, 80, 80)
+  ctx.fillRect(cx - gr, cy - gr, gr * 2, gr * 2)
 
   requestAnimationFrame(frame)
 }
