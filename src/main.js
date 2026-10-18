@@ -2,6 +2,11 @@ const canvas = document.getElementById('c')
 const ctx = canvas.getContext('2d')
 const $ = id => document.getElementById(id)
 
+// paint layer sits under the main canvas and never fades
+const paintCanvas = $('paint')
+const pctx = paintCanvas.getContext('2d')
+let painting = false
+
 let W, H
 let particles = []
 let count = 3000
@@ -35,6 +40,19 @@ function resize() {
   canvas.style.width = W + 'px'
   canvas.style.height = H + 'px'
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+
+  // resizing a canvas wipes it, so keep a copy of the painting and put it back
+  const old = document.createElement('canvas')
+  old.width = paintCanvas.width
+  old.height = paintCanvas.height
+  if (old.width) old.getContext('2d').drawImage(paintCanvas, 0, 0)
+  paintCanvas.width = W * dpr
+  paintCanvas.height = H * dpr
+  paintCanvas.style.width = W + 'px'
+  paintCanvas.style.height = H + 'px'
+  if (old.width) pctx.drawImage(old, 0, 0)
+  pctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+
   retarget()
 }
 
@@ -75,6 +93,23 @@ function setMode(i) {
 function hud() {
   $('mode').textContent = modes[mode]
   $('pal').textContent = paletteNames[palette]
+  $('painting').textContent = painting ? 'on' : 'off'
+}
+
+// background + paint + whatever's on screen right now, as a png
+function save() {
+  const out = document.createElement('canvas')
+  out.width = canvas.width
+  out.height = canvas.height
+  const o = out.getContext('2d')
+  o.fillStyle = '#05050a'
+  o.fillRect(0, 0, out.width, out.height)
+  o.drawImage(paintCanvas, 0, 0)
+  o.drawImage(canvas, 0, 0)
+  const a = document.createElement('a')
+  a.href = out.toDataURL('image/png')
+  a.download = `particles-${Date.now()}.png`
+  a.click()
 }
 
 function boom(x, y, power, big = false) {
@@ -136,6 +171,9 @@ addEventListener('keydown', e => {
   else if (k === '+' || k === '=') { count = Math.min(12000, count + 500); fill() }
   else if (k === '-') { count = Math.max(500, count - 500); fill() }
   else if (k === 'x') wells.length = 0
+  else if (k === 'p') painting = !painting
+  else if (k === 'e') pctx.clearRect(0, 0, W, H)
+  else if (k === 's') save()
   else if (k === 'f') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()
   else if (k === 'h') $('hud').style.opacity = $('hud').style.opacity === '0' ? '1' : '0'
   hud()
@@ -148,11 +186,13 @@ function frame(t) {
   hueDrift += audio.bass * 2
   const boost = 1 + audio.level * 6
 
-  // don't clear fully, the leftover alpha is what makes the trails
-  // (louder = longer trails)
-  ctx.globalCompositeOperation = 'source-over'
-  ctx.fillStyle = `rgba(5, 5, 10, ${.18 - audio.level * .08})`
+  // don't clear fully, just erase a bit of last frame -- that's what makes the trails
+  // (louder = longer trails). erasing instead of painting black lets the paint layer show through
+  ctx.globalCompositeOperation = 'destination-out'
+  ctx.fillStyle = `rgba(0, 0, 0, ${.18 - audio.level * .08})`
   ctx.fillRect(0, 0, W, H)
+  ctx.globalCompositeOperation = 'source-over'
+  pctx.globalAlpha = .06
   if (flash > .01) {
     ctx.fillStyle = `rgba(255, 255, 255, ${flash})`
     ctx.fillRect(0, 0, W, H)
@@ -226,16 +266,22 @@ function frame(t) {
     if (p.y < 0) { p.y = 0; p.vy *= -1 } else if (p.y > H) { p.y = H; p.vy *= -1 }
 
     const speed = Math.min(Math.hypot(p.vx, p.vy) / 8, 1)
+    let col, s
     if (m === 'image' && p.col) {
       // bigger squares so the picture fills in, and no additive glow or it all turns white
-      const s = Math.max(p.size, imgStep * .95) * (1 + audio.level * 1.5)
-      ctx.fillStyle = p.col
-      ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s)
+      col = p.col
+      s = Math.max(p.size, imgStep * .95) * (1 + audio.level * 1.5)
     } else {
       const hue = h0 + (h1 - h0) * ((p.seed + speed * .5 + hueDrift * .002) % 1)
-      const s = p.size * (1 + speed * 1.5 + audio.level * 2.5)
-      ctx.fillStyle = `hsla(${hue}, 100%, ${45 + speed * 30}%, ${.5 + speed * .5})`
-      ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s)
+      col = `hsla(${hue}, 100%, ${45 + speed * 30}%, ${.5 + speed * .5})`
+      s = p.size * (1 + speed * 1.5 + audio.level * 2.5)
+    }
+    ctx.fillStyle = col
+    ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s)
+    // paint is drawn super faint, it only shows up where particles keep passing over
+    if (painting) {
+      pctx.fillStyle = col
+      pctx.fillRect(p.x - s / 2, p.y - s / 2, s, s)
     }
   }
   ctx.globalCompositeOperation = 'lighter'
