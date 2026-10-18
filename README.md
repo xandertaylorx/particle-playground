@@ -6,6 +6,10 @@
   <code>vanilla js</code> · <code>one canvas</code> · <code>zero dependencies</code> · <code>~550 lines</code>
 </p>
 
+<h3 align="center">
+  <a href="https://xandertaylorx.github.io/particle-playground/">▶ play it in your browser</a>
+</h3>
+
 <br>
 
 ```
@@ -128,7 +132,9 @@ it's surprisingly good at catching kick drums.
 
 ## ▸ run it
 
-double-click `index.html`. that's it.
+easiest: **[xandertaylorx.github.io/particle-playground](https://xandertaylorx.github.io/particle-playground/)**
+
+locally: double-click `index.html`. that's it.
 
 if your browser gets weird about the mic on `file://`, serve it instead:
 
