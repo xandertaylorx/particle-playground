@@ -6,7 +6,9 @@ let W, H
 let particles = []
 let count = 3000
 const shocks = []
-const mouse = { x: 0, y: 0, active: false }
+const wells = []
+const mouse = { x: 0, y: 0, active: false, down: false, downAt: 0 }
+let flash = 0
 
 // [start hue, end hue] -- sunset goes past 360 on purpose so it wraps into orange
 const palettes = {
@@ -66,16 +68,20 @@ function hud() {
   $('pal').textContent = paletteNames[palette]
 }
 
-function boom(x, y, power) {
+function boom(x, y, power, big = false) {
   for (const p of particles) {
     const dx = p.x - x, dy = p.y - y
     const d = Math.hypot(dx, dy) + .01
     // 1/d falloff felt way better than 1/d^2 -- far particles still get a nudge
-    const f = Math.min(power * 120 / (d + 40), 25) * (.6 + p.seed * .8)
+    const f = Math.min(power * 120 / (d + 40), big ? 60 : 25) * (.6 + p.seed * .8)
     p.vx += dx / d * f
     p.vy += dy / d * f
   }
-  shocks.push({ x, y, r: 0, a: 1 })
+  shocks.push({ x, y, r: 0, a: 1, w: big ? 5 : 2, speed: big ? 22 : 14 })
+  if (big) {
+    shocks.push({ x, y, r: 0, a: .7, w: 2, speed: 12 })
+    flash = .35
+  }
 }
 
 addEventListener('pointermove', e => {
@@ -83,8 +89,32 @@ addEventListener('pointermove', e => {
   mouse.y = e.clientY
   mouse.active = true
 })
-canvas.addEventListener('pointerleave', () => mouse.active = false)
-canvas.addEventListener('pointerdown', e => boom(e.clientX, e.clientY, 18))
+canvas.addEventListener('pointerleave', () => {
+  mouse.active = false
+  mouse.down = false
+})
+
+// press = start charging, release = boom (bigger the longer you held)
+canvas.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return
+  mouse.x = e.clientX
+  mouse.y = e.clientY
+  mouse.active = true
+  mouse.down = true
+  mouse.downAt = performance.now()
+})
+addEventListener('pointerup', () => {
+  if (!mouse.down) return
+  mouse.down = false
+  const held = Math.min((performance.now() - mouse.downAt) / 1000, 3)
+  boom(mouse.x, mouse.y, 18 + held * 40, held > .4)
+})
+
+canvas.addEventListener('contextmenu', e => {
+  e.preventDefault()
+  wells.push({ x: e.clientX, y: e.clientY, born: performance.now() })
+  if (wells.length > 8) wells.shift()
+})
 
 addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return
@@ -96,6 +126,7 @@ addEventListener('keydown', e => {
   else if (k === 'c') palette = (palette + 1) % paletteNames.length
   else if (k === '+' || k === '=') { count = Math.min(12000, count + 500); fill() }
   else if (k === '-') { count = Math.max(500, count - 500); fill() }
+  else if (k === 'x') wells.length = 0
   else if (k === 'f') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()
   else if (k === 'h') $('hud').style.opacity = $('hud').style.opacity === '0' ? '1' : '0'
   hud()
@@ -113,6 +144,11 @@ function frame(t) {
   ctx.globalCompositeOperation = 'source-over'
   ctx.fillStyle = `rgba(5, 5, 10, ${.18 - audio.level * .08})`
   ctx.fillRect(0, 0, W, H)
+  if (flash > .01) {
+    ctx.fillStyle = `rgba(255, 255, 255, ${flash})`
+    ctx.fillRect(0, 0, W, H)
+    flash *= .8
+  }
   ctx.globalCompositeOperation = 'lighter'
 
   const [h0, h1] = palettes[paletteNames[palette]]
@@ -121,6 +157,7 @@ function frame(t) {
   // when the mouse is gone the target drifts around on its own
   const cx = mouse.active ? mouse.x : W / 2 + Math.cos(t / 1500) * W * .2
   const cy = mouse.active ? mouse.y : H / 2 + Math.sin(t / 1100) * H * .2
+  const charge = mouse.down ? Math.min((t - mouse.downAt) / 1000, 3) : 0
 
   for (const p of particles) {
     const dx = cx - p.x, dy = cy - p.y
@@ -128,7 +165,12 @@ function frame(t) {
     const nx = dx / d, ny = dy / d
     const pull = Math.min(600 / d, 1.2) * .35 * boost
 
-    if (m === 'attract') {
+    if (mouse.down) {
+      // black hole. overrides whatever mode you're in
+      const k = (.6 + charge) * Math.min(1, d / 30)
+      p.vx += nx * k - ny * k * .6
+      p.vy += ny * k + nx * k * .6
+    } else if (m === 'attract') {
       // weaker pull up close + sideways drift, otherwise they all collapse into one dot
       const k = pull * Math.min(1, d / (80 + p.seed * 160))
       p.vx += nx * k - ny * pull * .25 + (Math.random() - .5) * .4
@@ -157,8 +199,17 @@ function frame(t) {
       p.vy += (Math.random() - .5) * audio.level * 3
     }
 
+    for (const w of wells) {
+      const wx = w.x - p.x, wy = w.y - p.y
+      const wd = Math.hypot(wx, wy) + .01
+      if (wd > 260) continue
+      const k = (1 - wd / 260) * .5 * Math.min(1, wd / 20)
+      p.vx += wx / wd * k - wy / wd * k * .9
+      p.vy += wy / wd * k + wx / wd * k * .9
+    }
+
     // letters need more friction or they wobble forever
-    const damp = m === 'text' ? .9 : .96
+    const damp = m === 'text' && !mouse.down ? .9 : .96
     p.vx *= damp
     p.vy *= damp
     p.x += p.vx
@@ -173,24 +224,49 @@ function frame(t) {
     ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s)
   }
 
+  for (const w of wells) {
+    const age = (t - w.born) / 1000
+    const r = 14 + Math.sin(age * 3) * 2 + audio.bass * 12
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.fillStyle = '#000'
+    ctx.beginPath()
+    ctx.arc(w.x, w.y, r, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.globalCompositeOperation = 'lighter'
+    ctx.strokeStyle = `hsla(${h1}, 100%, 65%, .8)`
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.arc(w.x, w.y, r + 3, age * 2, age * 2 + Math.PI * 1.4)
+    ctx.stroke()
+  }
+
   for (let i = shocks.length - 1; i >= 0; i--) {
     const s = shocks[i]
-    s.r += 14
+    s.r += s.speed
     s.a *= .92
     ctx.strokeStyle = `hsla(${h1}, 100%, 70%, ${s.a})`
-    ctx.lineWidth = 2
+    ctx.lineWidth = s.w
     ctx.beginPath()
     ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2)
     ctx.stroke()
     if (s.a < .03) shocks.splice(i, 1)
   }
 
-  const gr = 40 + audio.level * 120
+  const gr = 40 + audio.level * 120 + charge * 60
   const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, gr)
-  g.addColorStop(0, `hsla(${h0}, 100%, 70%, .35)`)
+  g.addColorStop(0, `hsla(${mouse.down ? h1 : h0}, 100%, 70%, ${.35 + charge * .15})`)
   g.addColorStop(1, 'hsla(0, 0%, 0%, 0)')
   ctx.fillStyle = g
   ctx.fillRect(cx - gr, cy - gr, gr * 2, gr * 2)
+
+  // little ring that fills up while charging (full at 3s)
+  if (mouse.down) {
+    ctx.strokeStyle = `hsla(${h1}, 100%, 75%, .9)`
+    ctx.lineWidth = 3
+    ctx.beginPath()
+    ctx.arc(cx, cy, 24, -Math.PI / 2, -Math.PI / 2 + charge / 3 * Math.PI * 2)
+    ctx.stroke()
+  }
 
   requestAnimationFrame(frame)
 }
